@@ -2,6 +2,8 @@
 
 DOMAIN = "openai_ha_speech"
 TITLE = "OpenAI Speech API"
+STT_ENTITY_UNIQUE_ID = "openai-ha-speech-stt"
+TTS_ENTITY_UNIQUE_ID = "openai-ha-speech-tts"
 
 CONF_API_KEY = "api_key"
 

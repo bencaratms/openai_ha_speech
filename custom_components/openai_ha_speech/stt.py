@@ -24,6 +24,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from openai import OpenAI, NotGiven, NOT_GIVEN
 
 from .const import (
+    TITLE,
+    STT_ENTITY_UNIQUE_ID,
     CONF_API_KEY,
     CONF_STT_MODEL,
     STT_MODELS,
@@ -53,6 +55,9 @@ async def async_setup_entry(
 
 class OpenAISTTEntity(SpeechToTextEntity):
     """The OpenAI STT entity."""
+
+    _attr_name = TITLE
+    _attr_unique_id = STT_ENTITY_UNIQUE_ID
 
     def __init__(self, openai_client: OpenAI, config_entry: ConfigEntry):
         """Initialize STT entity."""
