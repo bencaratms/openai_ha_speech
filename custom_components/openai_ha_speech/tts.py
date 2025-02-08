@@ -112,7 +112,7 @@ class OpenAITTSEntity(TextToSpeechEntity):
 
             end_time = time.time()
             _LOGGER.info(
-                f"TTS Delay: {self.__time_delta(start_time, receive_time)}ms; Duration: {self.__time_delta(receive_time, end_time)}ms; Total: {self.__time_delta(start_time, end_time)}ms"
+                f"TTS Delay: {OpenAITTSEntity.__time_delta(start_time, receive_time)}ms; Duration: {OpenAITTSEntity.__time_delta(receive_time, end_time)}ms; Total: {OpenAITTSEntity.__time_delta(start_time, end_time)}ms"
             )
 
             audio_bytes = audio_data.getvalue()

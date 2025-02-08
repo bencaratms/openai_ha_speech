@@ -112,7 +112,7 @@ class OpenAISTTEntity(SpeechToTextEntity):
 
             end_time = time.time()
             _LOGGER.info(
-                f"STT Delay: {self.__time_delta(start_time, receive_time)}ms; Duration: {self.__time_delta(receive_time, end_time)}ms; Total: {self.__time_delta(start_time, end_time)}ms"
+                f"STT Delay: {OpenAISTTEntity.__time_delta(start_time, receive_time)}ms; Duration: {OpenAISTTEntity.__time_delta(receive_time, end_time)}ms; Total: {OpenAISTTEntity.__time_delta(start_time, end_time)}ms"
             )
 
             # The response should contain the transcription

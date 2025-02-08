@@ -81,7 +81,8 @@ class OpenAISpeechConfigFlow(ConfigFlow, domain=DOMAIN):
         }
     )
 
-    def __validate_user_input(user_input: dict):
+    @staticmethod
+    def __validate_user_input(user_input: dict[str, Any]):
         """Validate user input fields."""
         if user_input.get(CONF_API_KEY) is None:
             raise ValueError("API key is required")
@@ -99,7 +100,7 @@ class OpenAISpeechConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, Any] = {}
         if user_input is not None:
             try:
-                self.__validate_user_input(user_input)
+                OpenAISpeechConfigFlow.__validate_user_input(user_input)
 
                 # Return the validated data.
                 return self.async_create_entry(
@@ -125,7 +126,7 @@ class OpenAISpeechConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, Any] = {}
         if user_input is not None:
             try:
-                self.__validate_user_input(user_input)
+                OpenAISpeechConfigFlow.__validate_user_input(user_input)
 
                 # Return the validated data.
                 return self.async_update_reload_and_abort(
