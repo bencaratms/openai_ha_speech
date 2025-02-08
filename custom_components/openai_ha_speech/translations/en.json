@@ -1,0 +1,19 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Add OpenAI speech engine",
+                "description": "Provide configuration data. See documentation for further info.",
+                "data": {
+                    "api_key": "OpenAI API key.",
+                    "tts_model": "The TTS model.",
+                    "tts_response_format": "The TTS response format.",
+                    "tts_speed": "The speed of the speech",
+                    "stt_model": "The STT model.",
+                    "stt_language": "The STT language (leave blank if variable).",
+                    "stt_temperature": "STT temperature."
+                }
+            }
+        }
+    }
+}
