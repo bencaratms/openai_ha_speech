@@ -50,9 +50,6 @@ async def async_setup_entry(
 class OpenAITTSEntity(TextToSpeechEntity):
     """The OpenAI TTS entity."""
 
-    _attr_has_entity_name = True
-    _attr_should_poll = False
-
     def __init__(self, config_entry: ConfigEntry):
         """Initialize TTS entity."""
         self.openai_client = OpenAI(api_key=config_entry.data[CONF_API_KEY])
@@ -115,7 +112,7 @@ class OpenAITTSEntity(TextToSpeechEntity):
 
             end_time = time.time()
             _LOGGER.info(
-                f"Delay: {self.__time_delta(start_time, receive_time)}ms; Duration: {self.__time_delta(receive_time, end_time)}ms; Total: {self.__time_delta(start_time, end_time)}ms"
+                f"TTS Delay: {self.__time_delta(start_time, receive_time)}ms; Duration: {self.__time_delta(receive_time, end_time)}ms; Total: {self.__time_delta(start_time, end_time)}ms"
             )
 
             audio_bytes = audio_data.getvalue()
