@@ -3,8 +3,6 @@
 from collections.abc import AsyncIterable
 import logging
 import time
-from io import BytesIO
-from typing import Any
 
 from homeassistant.components.stt import (
     AudioBitRates,
