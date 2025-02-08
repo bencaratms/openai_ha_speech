@@ -1,5 +1,6 @@
 """Support for OpenAI Text to Speech."""
 
+import asyncio
 import logging
 import time
 from io import BytesIO
@@ -44,15 +45,19 @@ async def async_setup_entry(
     if CONF_API_KEY not in config_entry.data:
         return
 
-    async_add_entities([OpenAITTSEntity(config_entry)])
+    openai_client = await asyncio.to_thread(
+        lambda: OpenAI(api_key=config_entry.data[CONF_API_KEY])
+    )
+
+    async_add_entities([OpenAITTSEntity(openai_client, config_entry)])
 
 
 class OpenAITTSEntity(TextToSpeechEntity):
     """The OpenAI TTS entity."""
 
-    def __init__(self, config_entry: ConfigEntry):
+    def __init__(self, openai_client: OpenAI, config_entry: ConfigEntry):
         """Initialize TTS entity."""
-        self.openai_client = OpenAI(api_key=config_entry.data[CONF_API_KEY])
+        self.openai_client = openai_client
         self.tts_model = config_entry.data.get(CONF_TTS_MODEL, TTS_MODELS[0])
         self.tts_response_format = config_entry.data.get(
             CONF_TTS_RESPONSE_FORMAT, TTS_RESPONSE_FORMATS[0]

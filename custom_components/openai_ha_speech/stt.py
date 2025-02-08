@@ -1,6 +1,8 @@
 """Support for OpenAI Speech to Text."""
 
+import asyncio
 from collections.abc import AsyncIterable
+from io import BytesIO
 import logging
 import time
 
@@ -43,15 +45,18 @@ async def async_setup_entry(
     if CONF_API_KEY not in config_entry.data:
         return
 
-    async_add_entities([OpenAISTTEntity(config_entry)])
+    openai_client = await asyncio.to_thread(
+        lambda: OpenAI(api_key=config_entry.data[CONF_API_KEY])
+    )
+    async_add_entities([OpenAISTTEntity(openai_client, config_entry)])
 
 
 class OpenAISTTEntity(SpeechToTextEntity):
     """The OpenAI STT entity."""
 
-    def __init__(self, config_entry: ConfigEntry):
+    def __init__(self, openai_client: OpenAI, config_entry: ConfigEntry):
         """Initialize STT entity."""
-        self.openai_client = OpenAI(api_key=config_entry.data[CONF_API_KEY])
+        self.openai_client = openai_client
         self.stt_model = config_entry.data.get(CONF_STT_MODEL, STT_MODELS[0])
         self.stt_language: str | NotGiven = config_entry.data.get(
             CONF_STT_LANGUAGE, NOT_GIVEN
@@ -103,11 +108,19 @@ class OpenAISTTEntity(SpeechToTextEntity):
             start_time = time.time()
             receive_time = start_time
 
-            transcription = self.openai_client.audio.transcriptions.create(
-                model=self.stt_model,
-                language=self.stt_language,
-                temperature=self.stt_temperature,
-                file=stream,
+            audio_stream = BytesIO()
+            async for chunk in stream:
+                audio_stream.write(chunk)
+
+            audio_stream.seek(0)  # Reset the stream position to the beginning
+
+            transcription = await asyncio.to_thread(
+                lambda: self.openai_client.audio.transcriptions.create(
+                    model=self.stt_model,
+                    language=self.stt_language,
+                    temperature=self.stt_temperature,
+                    file=audio_stream,
+                )
             )
 
             end_time = time.time()
