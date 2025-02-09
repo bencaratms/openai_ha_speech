@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import time
 from io import BytesIO
 from typing import Any
 
@@ -89,11 +88,6 @@ class OpenAITTSEntity(TextToSpeechEntity):
         """Return a list of supported voices for a language."""
         return [Voice(voice, voice) for voice in TTS_VOICES]
 
-    @staticmethod
-    def __time_delta(start_time: float, end_time: float) -> int:
-        """Calculate the time delta in milliseconds."""
-        return int((end_time - start_time) * 1000)
-
     async def async_get_tts_audio(
         self, message: str, language: str, options: dict[str, Any]
     ) -> TtsAudioType:
@@ -105,27 +99,10 @@ class OpenAITTSEntity(TextToSpeechEntity):
             if len(message) > MAX_MESSAGE_LENGTH:
                 raise MaxLengthExceeded
 
-            start_time = time.time()
-            receive_time = start_time
-            audio_data = BytesIO()
-
-            with self.openai_client.audio.speech.with_streaming_response.create(
-                model=self.tts_model,
-                voice=tts_voice,
-                input=message,
-                response_format=self.tts_response_format,
-                speed=self.tts_speed,
-            ) as response:
-                receive_time = time.time()
-                for chunk in response.iter_bytes(chunk_size=1024):
-                    audio_data.write(chunk)
-
-            end_time = time.time()
-            _LOGGER.info(
-                f"TTS Delay: {OpenAITTSEntity.__time_delta(start_time, receive_time)}ms; Duration: {OpenAITTSEntity.__time_delta(receive_time, end_time)}ms; Total: {OpenAITTSEntity.__time_delta(start_time, end_time)}ms"
+            # Generate TTS audio
+            audio_bytes = await asyncio.to_thread(
+                self._generate_tts_audio, message, tts_voice
             )
-
-            audio_bytes = audio_data.getvalue()
 
             # The response should contain the audio file content
             return (self.tts_response_format, audio_bytes)
@@ -135,3 +112,19 @@ class OpenAITTSEntity(TextToSpeechEntity):
             _LOGGER.error("Unknown Error: %s", e, exc_info=True)
 
         return (None, None)
+
+    def _generate_tts_audio(self, message: str, tts_voice: str) -> bytes:
+        """Generate TTS audio."""
+        audio_data = BytesIO()
+
+        with self.openai_client.audio.speech.with_streaming_response.create(
+            model=self.tts_model,
+            voice=tts_voice,
+            input=message,
+            response_format=self.tts_response_format,
+            speed=self.tts_speed,
+        ) as response:
+            for chunk in response.iter_bytes(chunk_size=1024):
+                audio_data.write(chunk)
+
+        return audio_data.getvalue()

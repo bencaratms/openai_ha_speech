@@ -4,7 +4,6 @@ import asyncio
 from collections.abc import AsyncIterable
 from io import BytesIO
 import logging
-import time
 import wave
 
 from homeassistant.components.stt import (
@@ -101,34 +100,26 @@ class OpenAISTTEntity(SpeechToTextEntity):
         """Return a list of supported channels."""
         return [AudioChannels.CHANNEL_MONO]
 
-    @staticmethod
-    def __time_delta(start_time: float, end_time: float) -> int:
-        """Calculate the time delta in milliseconds."""
-        return int((end_time - start_time) * 1000)
-
     async def async_process_audio_stream(
         self, metadata: SpeechMetadata, stream: AsyncIterable[bytes]
     ) -> SpeechResult:
         """Convert speech into text."""
         try:
-            start_time = time.time()
-
             # Convert the audio stream into bytes
             audio_bytes: bytes = b""
             async for chunk in stream:
                 audio_bytes += chunk
 
+            # Convert the audio bytes into a WAV file
             audio_stream = BytesIO()
             with wave.open(audio_stream, "wb") as wf:
                 wf.setnchannels(metadata.channel)
                 wf.setsampwidth(metadata.bit_rate // 8)
                 wf.setframerate(metadata.sample_rate)
                 wf.writeframes(audio_bytes)
-
             audio_file = ("stt_audio.wav", audio_stream, "audio/wav")
 
-            translate_time = time.time()
-
+            # Transcribe the audio file
             transcription = await asyncio.to_thread(
                 lambda: self.openai_client.audio.transcriptions.create(
                     model=self.stt_model,
@@ -137,11 +128,6 @@ class OpenAISTTEntity(SpeechToTextEntity):
                     response_format="json",
                     file=audio_file,
                 )
-            )
-
-            end_time = time.time()
-            _LOGGER.info(
-                f"STT Delay: {OpenAISTTEntity.__time_delta(start_time, translate_time)}ms; Duration: {OpenAISTTEntity.__time_delta(translate_time, end_time)}ms; Total: {OpenAISTTEntity.__time_delta(start_time, end_time)}ms"
             )
 
             # The response should contain the transcription
