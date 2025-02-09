@@ -5,6 +5,7 @@ from collections.abc import AsyncIterable
 from io import BytesIO
 import logging
 import time
+import wave
 
 from homeassistant.components.stt import (
     AudioBitRates,
@@ -111,26 +112,36 @@ class OpenAISTTEntity(SpeechToTextEntity):
         """Convert speech into text."""
         try:
             start_time = time.time()
-            receive_time = start_time
+
+            # Convert the audio stream into bytes
+            audio_bytes: bytes = b""
+            async for chunk in stream:
+                audio_bytes += chunk
 
             audio_stream = BytesIO()
-            async for chunk in stream:
-                audio_stream.write(chunk)
+            with wave.open(audio_stream, "wb") as wf:
+                wf.setnchannels(metadata.channel)
+                wf.setsampwidth(metadata.bit_rate // 8)
+                wf.setframerate(metadata.sample_rate)
+                wf.writeframes(audio_bytes)
 
-            audio_stream.seek(0)  # Reset the stream position to the beginning
+            audio_file = ("stt_audio.wav", audio_stream, "audio/wav")
+
+            translate_time = time.time()
 
             transcription = await asyncio.to_thread(
                 lambda: self.openai_client.audio.transcriptions.create(
                     model=self.stt_model,
                     language=self.stt_language,
                     temperature=self.stt_temperature,
-                    file=audio_stream,
+                    response_format="json",
+                    file=audio_file,
                 )
             )
 
             end_time = time.time()
             _LOGGER.info(
-                f"STT Delay: {OpenAISTTEntity.__time_delta(start_time, receive_time)}ms; Duration: {OpenAISTTEntity.__time_delta(receive_time, end_time)}ms; Total: {OpenAISTTEntity.__time_delta(start_time, end_time)}ms"
+                f"STT Delay: {OpenAISTTEntity.__time_delta(start_time, translate_time)}ms; Duration: {OpenAISTTEntity.__time_delta(translate_time, end_time)}ms; Total: {OpenAISTTEntity.__time_delta(start_time, end_time)}ms"
             )
 
             # The response should contain the transcription
