@@ -25,6 +25,7 @@ from .const import (
     TTS_RESPONSE_FORMATS,
     CONF_TTS_SPEED,
     DEFAULT_TTS_SPEED,
+    CONF_TTS_INSTRUCTIONS,
     CONF_STT_MODEL,
     STT_MODELS,
     CONF_STT_LANGUAGE,
@@ -65,6 +66,7 @@ class OpenAISpeechConfigFlow(ConfigFlow, domain=DOMAIN):
             vol.Optional(CONF_TTS_SPEED, default=DEFAULT_TTS_SPEED): NumberSelector(
                 NumberSelectorConfig(min=0.25, max=4.0, step=0.25)
             ),
+            vol.Optional(CONF_TTS_INSTRUCTIONS): str,
             vol.Required(CONF_STT_MODEL, default=STT_MODELS[0]): selector(
                 {
                     "select": {

@@ -8,10 +8,11 @@ TTS_ENTITY_UNIQUE_ID = "openai-ha-speech-tts"
 CONF_API_KEY = "api_key"
 
 CONF_TTS_MODEL = "tts_model"
-TTS_MODELS = ["tts-1", "tts-1-hd"]
+TTS_MODELS = ["tts-1", "tts-1-hd", "gpt-4o-mini-tts"]
 TTS_VOICES = [
     "alloy",
     "ash",
+    "ballad",
     "coral",
     "echo",
     "fable",
@@ -19,14 +20,16 @@ TTS_VOICES = [
     "nova",
     "sage",
     "shimmer",
+    "verse",
 ]
 CONF_TTS_RESPONSE_FORMAT = "tts_response_format"
 TTS_RESPONSE_FORMATS = ["mp3", "opus", "aac", "flac", "wav", "pcm"]
 CONF_TTS_SPEED = "tts_speed"
 DEFAULT_TTS_SPEED: float = 1.0
+CONF_TTS_INSTRUCTIONS = "tts_instructions"
 
 CONF_STT_MODEL = "stt_model"
-STT_MODELS = ["whisper-1"]
+STT_MODELS = ["gpt-4o-transcribe", "gpt-4o-mini-transcribe", "whisper-1"]
 CONF_STT_LANGUAGE = "stt_language"
 CONF_STT_TEMPERATURE = "stt_temperature"
 DEFAULT_STT_TEMPERATURE: float = 0.0
