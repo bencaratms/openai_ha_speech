@@ -6,7 +6,7 @@ import asyncio
 import base64
 import json
 import logging
-from typing import Any
+from typing import Any, AsyncIterator
 
 import aiohttp
 
@@ -32,6 +32,8 @@ from .const import (
     DEFAULT_REALTIME_TEMPERATURE,
     CONF_REALTIME_MAX_TOKENS,
     DEFAULT_REALTIME_MAX_TOKENS,
+    CONF_REALTIME_IDLE_TIMEOUT,
+    DEFAULT_REALTIME_IDLE_TIMEOUT,
     SUPPORTED_LANGUAGES,
 )
 
@@ -52,22 +54,31 @@ async def async_setup_entry(
         return
 
     async_add_entities(
-        [OpenAIRealtimeConversationEntity(config_entry)],
+        [OpenAIRealtimeConversationEntity(hass, config_entry)],
         update_before_add=False,
     )
 
 
 class OpenAIRealtimeConversationEntity(conversation.ConversationEntity):
-    """OpenAI Realtime API conversation entity."""
+    """OpenAI Realtime API conversation entity with persistent connection."""
 
     _attr_has_entity_name = True
     _attr_name = "OpenAI Realtime"
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
+    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         """Initialize the conversation entity."""
+        self.hass = hass
         self._config_entry = config_entry
         self._attr_unique_id = CONVERSATION_ENTITY_UNIQUE_ID
         self._conversation_history: list[dict[str, Any]] = []
+
+        # Persistent connection state
+        self._session: aiohttp.ClientSession | None = None
+        self._ws: aiohttp.ClientWebSocketResponse | None = None
+        self._is_connected = False
+        self._idle_timeout_task: asyncio.Task | None = None
+        self._connection_lock = asyncio.Lock()
+        self._last_activity: float = 0
 
     @property
     def supported_languages(self) -> list[str]:
@@ -110,6 +121,144 @@ class OpenAIRealtimeConversationEntity(conversation.ConversationEntity):
             CONF_REALTIME_MAX_TOKENS, DEFAULT_REALTIME_MAX_TOKENS
         )
 
+    @property
+    def _idle_timeout(self) -> int:
+        """Return the idle timeout in seconds."""
+        return self._config_entry.data.get(
+            CONF_REALTIME_IDLE_TIMEOUT, DEFAULT_REALTIME_IDLE_TIMEOUT
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Handle entity removal from Home Assistant."""
+        await self._disconnect()
+
+    async def _connect(self) -> bool:
+        """Establish or reuse WebSocket connection to the Realtime API."""
+        async with self._connection_lock:
+            # Already connected
+            if self._is_connected and self._ws and not self._ws.closed:
+                self._reset_idle_timeout()
+                return True
+
+            # Clean up any stale connection
+            await self._cleanup_connection()
+
+            url = f"{OPENAI_REALTIME_URL}?model={self._model}"
+            headers = {
+                "Authorization": f"Bearer {self._api_key}",
+                "OpenAI-Beta": "realtime=v1",
+            }
+
+            try:
+                self._session = aiohttp.ClientSession()
+                self._ws = await self._session.ws_connect(
+                    url,
+                    headers=headers,
+                    heartbeat=30.0,
+                )
+
+                # Wait for session.created event
+                async for msg in self._ws:
+                    if msg.type == aiohttp.WSMsgType.TEXT:
+                        data = json.loads(msg.data)
+                        if data.get("type") == "session.created":
+                            _LOGGER.debug("Realtime session created")
+                            break
+                    elif msg.type == aiohttp.WSMsgType.ERROR:
+                        _LOGGER.error("WebSocket error: %s", self._ws.exception())
+                        await self._cleanup_connection()
+                        return False
+
+                # Update session configuration
+                session_update = {
+                    "type": "session.update",
+                    "session": {
+                        "modalities": ["text"],
+                        "instructions": self._instructions,
+                        "voice": self._voice,
+                        "temperature": self._temperature,
+                        "max_response_output_tokens": self._max_tokens,
+                        "input_audio_format": "pcm16",
+                        "output_audio_format": "pcm16",
+                    },
+                }
+                await self._ws.send_json(session_update)
+                _LOGGER.debug("Session configuration sent")
+
+                self._is_connected = True
+                self._reset_idle_timeout()
+                _LOGGER.info("Connected to OpenAI Realtime API")
+                return True
+
+            except aiohttp.ClientError as err:
+                _LOGGER.error("Failed to connect to OpenAI Realtime API: %s", err)
+                await self._cleanup_connection()
+                return False
+            except Exception as err:
+                _LOGGER.exception(
+                    "Unexpected error connecting to Realtime API: %s", err
+                )
+                await self._cleanup_connection()
+                return False
+
+    async def _cleanup_connection(self) -> None:
+        """Clean up WebSocket and session resources."""
+        self._is_connected = False
+        if self._ws:
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
+            self._ws = None
+        if self._session:
+            try:
+                await self._session.close()
+            except Exception:
+                pass
+            self._session = None
+
+    async def _disconnect(self) -> None:
+        """Disconnect from the Realtime API."""
+        async with self._connection_lock:
+            # Cancel idle timeout task
+            if self._idle_timeout_task:
+                self._idle_timeout_task.cancel()
+                try:
+                    await self._idle_timeout_task
+                except asyncio.CancelledError:
+                    pass
+                self._idle_timeout_task = None
+
+            await self._cleanup_connection()
+            # Clear conversation history on disconnect
+            self._conversation_history.clear()
+            _LOGGER.info("Disconnected from OpenAI Realtime API")
+
+    def _reset_idle_timeout(self) -> None:
+        """Reset the idle timeout timer."""
+        import time
+
+        self._last_activity = time.time()
+
+        # Cancel existing timeout task
+        if self._idle_timeout_task:
+            self._idle_timeout_task.cancel()
+
+        # Start new timeout task
+        self._idle_timeout_task = self.hass.async_create_task(
+            self._idle_timeout_handler()
+        )
+
+    async def _idle_timeout_handler(self) -> None:
+        """Handle idle timeout - disconnect after inactivity."""
+        try:
+            await asyncio.sleep(self._idle_timeout)
+            _LOGGER.debug("Idle timeout reached, disconnecting")
+            await self._disconnect()
+        except asyncio.CancelledError:
+            # Timeout was reset, this is expected
+            pass
+
     async def async_process(self, user_input: ConversationInput) -> ConversationResult:
         """Process a sentence and return a response.
 
@@ -129,152 +278,105 @@ class OpenAIRealtimeConversationEntity(conversation.ConversationEntity):
 
     async def _send_text_message(self, text: str) -> str:
         """Send a text message to the Realtime API and get a response."""
-        url = f"{OPENAI_REALTIME_URL}?model={self._model}"
+        # Ensure we're connected
+        if not await self._connect():
+            return "Sorry, I couldn't connect to the OpenAI service."
 
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "OpenAI-Beta": "realtime=v1",
-        }
+        # Reset idle timeout on activity
+        self._reset_idle_timeout()
 
-        response_text = ""
-        response_complete = asyncio.Event()
+        # Type guard - we know _ws is not None after successful connect
+        ws = self._ws
+        if ws is None:
+            return "Sorry, I couldn't connect to the OpenAI service."
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.ws_connect(
-                    url,
-                    headers=headers,
-                    heartbeat=30.0,
-                ) as ws:
-                    # Wait for session.created event
-                    session_created = False
-                    async for msg in ws:
-                        if msg.type == aiohttp.WSMsgType.TEXT:
-                            data = json.loads(msg.data)
-                            if data.get("type") == "session.created":
-                                session_created = True
-                                _LOGGER.debug("Realtime session created")
-                                break
-                        elif msg.type == aiohttp.WSMsgType.ERROR:
-                            _LOGGER.error("WebSocket error: %s", ws.exception())
-                            return "Sorry, I encountered a connection error."
+            # Send the user's message
+            user_message = {
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": text}],
+                },
+            }
+            await ws.send_json(user_message)
+            _LOGGER.debug("User message sent: %s", text)
 
-                    if not session_created:
-                        return "Sorry, I couldn't establish a session."
+            # Request a response
+            await ws.send_json({"type": "response.create"})
+            _LOGGER.debug("Response requested")
 
-                    # Update session configuration
-                    session_update = {
-                        "type": "session.update",
-                        "session": {
-                            "modalities": ["text"],
-                            "instructions": self._instructions,
-                            "voice": self._voice,
-                            "temperature": self._temperature,
-                            "max_response_output_tokens": self._max_tokens,
-                            "input_audio_format": "pcm16",
-                            "output_audio_format": "pcm16",
-                        },
-                    }
-                    await ws.send_json(session_update)
-                    _LOGGER.debug("Session update sent")
+            # Collect response
+            response_text = ""
+            response_parts: list[str] = []
 
-                    # Add conversation history to context
-                    for hist_item in self._conversation_history[-10:]:
-                        conversation_item = {
-                            "type": "conversation.item.create",
-                            "item": {
-                                "type": "message",
-                                "role": hist_item["role"],
-                                "content": [
-                                    (
-                                        {
-                                            "type": "input_text",
-                                            "text": hist_item["content"],
-                                        }
-                                        if hist_item["role"] == "user"
-                                        else {
-                                            "type": "text",
-                                            "text": hist_item["content"],
-                                        }
-                                    )
-                                ],
-                            },
-                        }
-                        await ws.send_json(conversation_item)
+            async for msg in ws:
+                if msg.type == aiohttp.WSMsgType.TEXT:
+                    data = json.loads(msg.data)
+                    event_type = data.get("type", "")
 
-                    # Send the user's message
-                    user_message = {
-                        "type": "conversation.item.create",
-                        "item": {
-                            "type": "message",
-                            "role": "user",
-                            "content": [{"type": "input_text", "text": text}],
-                        },
-                    }
-                    await ws.send_json(user_message)
-                    _LOGGER.debug("User message sent: %s", text)
+                    if event_type == "response.text.delta":
+                        delta = data.get("delta", "")
+                        response_parts.append(delta)
 
-                    # Request a response
-                    await ws.send_json({"type": "response.create"})
-                    _LOGGER.debug("Response requested")
+                    elif event_type == "response.text.done":
+                        response_text = data.get("text", "".join(response_parts))
+                        _LOGGER.debug("Response text complete")
 
-                    # Collect response
-                    response_parts: list[str] = []
+                    elif event_type == "response.done":
+                        _LOGGER.debug("Response complete")
+                        break
 
-                    async for msg in ws:
-                        if msg.type == aiohttp.WSMsgType.TEXT:
-                            data = json.loads(msg.data)
-                            event_type = data.get("type", "")
+                    elif event_type == "error":
+                        error_msg = data.get("error", {}).get(
+                            "message", "Unknown error"
+                        )
+                        _LOGGER.error("Realtime API error: %s", error_msg)
+                        # Disconnect on error to force reconnect next time
+                        await self._disconnect()
+                        return f"Sorry, an error occurred: {error_msg}"
 
-                            if event_type == "response.text.delta":
-                                delta = data.get("delta", "")
-                                response_parts.append(delta)
+                elif msg.type == aiohttp.WSMsgType.ERROR:
+                    _LOGGER.error("WebSocket error: %s", ws.exception())
+                    await self._disconnect()
+                    return "Sorry, I encountered a connection error."
 
-                            elif event_type == "response.text.done":
-                                response_text = data.get(
-                                    "text", "".join(response_parts)
-                                )
-                                _LOGGER.debug("Response text complete")
+                elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.CLOSING):
+                    _LOGGER.warning("WebSocket closed unexpectedly")
+                    await self._disconnect()
+                    return "Sorry, the connection was lost."
 
-                            elif event_type == "response.done":
-                                _LOGGER.debug("Response complete")
-                                break
+            if not response_text and response_parts:
+                response_text = "".join(response_parts)
 
-                            elif event_type == "error":
-                                error_msg = data.get("error", {}).get(
-                                    "message", "Unknown error"
-                                )
-                                _LOGGER.error("Realtime API error: %s", error_msg)
-                                return f"Sorry, an error occurred: {error_msg}"
+            # Store in conversation history (server-side history is maintained)
+            self._conversation_history.append({"role": "user", "content": text})
+            self._conversation_history.append(
+                {"role": "assistant", "content": response_text}
+            )
 
-                        elif msg.type == aiohttp.WSMsgType.ERROR:
-                            _LOGGER.error("WebSocket error: %s", ws.exception())
-                            return "Sorry, I encountered a connection error."
+            # Keep local history manageable
+            if len(self._conversation_history) > 20:
+                self._conversation_history = self._conversation_history[-20:]
 
-                    if not response_text and response_parts:
-                        response_text = "".join(response_parts)
+            # Reset idle timeout after successful response
+            self._reset_idle_timeout()
 
-                    # Store in conversation history
-                    self._conversation_history.append({"role": "user", "content": text})
-                    self._conversation_history.append(
-                        {"role": "assistant", "content": response_text}
-                    )
-
-                    # Keep history manageable
-                    if len(self._conversation_history) > 20:
-                        self._conversation_history = self._conversation_history[-20:]
+            return response_text or "I'm sorry, I couldn't generate a response."
 
         except aiohttp.ClientError as err:
-            _LOGGER.error("Failed to connect to OpenAI Realtime API: %s", err)
-            return "Sorry, I couldn't connect to the OpenAI service."
+            _LOGGER.error("WebSocket error during message: %s", err)
+            await self._disconnect()
+            return "Sorry, I encountered a connection error."
         except asyncio.TimeoutError:
-            _LOGGER.error("Timeout connecting to OpenAI Realtime API")
+            _LOGGER.error("Timeout waiting for response")
+            await self._disconnect()
             return "Sorry, the request timed out."
         except Exception as err:
             _LOGGER.exception("Unexpected error in Realtime API: %s", err)
+            await self._disconnect()
             return "Sorry, an unexpected error occurred."
-
-        return response_text or "I'm sorry, I couldn't generate a response."
 
 
 class OpenAIRealtimeAudioHandler:
@@ -449,7 +551,3 @@ class OpenAIRealtimeAudioHandler:
     def is_connected(self) -> bool:
         """Return whether the handler is connected."""
         return self._is_connected
-
-
-# Type hint for async iterator
-from typing import AsyncIterator

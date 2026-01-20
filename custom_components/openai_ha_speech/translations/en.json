@@ -16,7 +16,8 @@
                     "realtime_model": "Realtime API model.",
                     "realtime_voice": "Realtime API voice.",
                     "realtime_instructions": "System instructions for the conversation agent.",
-                    "realtime_temperature": "Realtime API temperature (creativity)."
+                    "realtime_temperature": "Realtime API temperature (creativity).",
+                    "realtime_idle_timeout": "Idle timeout before disconnecting (seconds)."
                 }
             }
         }

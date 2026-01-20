@@ -39,6 +39,8 @@ from .const import (
     DEFAULT_REALTIME_INSTRUCTIONS,
     CONF_REALTIME_TEMPERATURE,
     DEFAULT_REALTIME_TEMPERATURE,
+    CONF_REALTIME_IDLE_TIMEOUT,
+    DEFAULT_REALTIME_IDLE_TIMEOUT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -112,6 +114,9 @@ class OpenAISpeechConfigFlow(ConfigFlow, domain=DOMAIN):
             vol.Optional(
                 CONF_REALTIME_TEMPERATURE, default=DEFAULT_REALTIME_TEMPERATURE
             ): NumberSelector(NumberSelectorConfig(min=0.0, max=1.2, step=0.1)),
+            vol.Optional(
+                CONF_REALTIME_IDLE_TIMEOUT, default=DEFAULT_REALTIME_IDLE_TIMEOUT
+            ): NumberSelector(NumberSelectorConfig(min=10, max=300, step=10, unit_of_measurement="seconds")),
         }
     )
 
