@@ -1,0 +1,22 @@
+# Local configuration
+config.json
+.env
+
+# Output files
+output/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

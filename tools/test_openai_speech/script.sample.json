@@ -1,0 +1,47 @@
+{
+    "name": "Basic TTS and STT Test",
+    "description": "Tests TTS output, STT transcription, and conversation",
+    "steps": [
+        {
+            "action": "log",
+            "message": "Starting test sequence..."
+        },
+        {
+            "action": "tts",
+            "text": "Hello! This is a text to speech test.",
+            "description": "Test TTS output"
+        },
+        {
+            "action": "delay",
+            "seconds": 1
+        },
+        {
+            "action": "type",
+            "text": "What is the capital of France?",
+            "description": "Test conversation with typed input"
+        },
+        {
+            "action": "wait_response",
+            "timeout": 30
+        },
+        {
+            "action": "assert",
+            "contains": "Paris",
+            "description": "Verify response mentions Paris"
+        },
+        {
+            "action": "stt",
+            "audio_file": "test_audio.wav",
+            "description": "Test STT with audio file"
+        },
+        {
+            "action": "record",
+            "duration": 5,
+            "description": "Record 5 seconds of audio and transcribe"
+        },
+        {
+            "action": "log",
+            "message": "Test sequence complete!"
+        }
+    ]
+}
