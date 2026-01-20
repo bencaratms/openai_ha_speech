@@ -40,9 +40,20 @@ CONF_REALTIME_ENABLED = "realtime_enabled"
 CONF_REALTIME_MODEL = "realtime_model"
 REALTIME_MODELS = ["gpt-4o-realtime-preview", "gpt-4o-mini-realtime-preview"]
 CONF_REALTIME_VOICE = "realtime_voice"
-REALTIME_VOICES = ["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"]
+REALTIME_VOICES = [
+    "alloy",
+    "ash",
+    "ballad",
+    "coral",
+    "echo",
+    "sage",
+    "shimmer",
+    "verse",
+]
 CONF_REALTIME_INSTRUCTIONS = "realtime_instructions"
-DEFAULT_REALTIME_INSTRUCTIONS = "You are a helpful home assistant. Be concise and helpful."
+DEFAULT_REALTIME_INSTRUCTIONS = (
+    "You are a helpful home assistant. Be concise and helpful."
+)
 CONF_REALTIME_TEMPERATURE = "realtime_temperature"
 DEFAULT_REALTIME_TEMPERATURE: float = 0.8
 CONF_REALTIME_MAX_TOKENS = "realtime_max_tokens"

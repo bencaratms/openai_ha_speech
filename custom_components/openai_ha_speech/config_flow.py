@@ -116,7 +116,11 @@ class OpenAISpeechConfigFlow(ConfigFlow, domain=DOMAIN):
             ): NumberSelector(NumberSelectorConfig(min=0.0, max=1.2, step=0.1)),
             vol.Optional(
                 CONF_REALTIME_IDLE_TIMEOUT, default=DEFAULT_REALTIME_IDLE_TIMEOUT
-            ): NumberSelector(NumberSelectorConfig(min=10, max=300, step=10, unit_of_measurement="seconds")),
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=10, max=300, step=10, unit_of_measurement="seconds"
+                )
+            ),
         }
     )
 
