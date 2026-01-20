@@ -1,7 +1,7 @@
 {
     "domain": "openai_ha_speech",
     "name": "OpenAI Speech Service",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "integration_type": "hub",
     "documentation": "https://github.com/bencaratms/openai_ha_speech/",
     "issue_tracker": "https://github.com/bencaratms/openai_ha_speech/issues",
@@ -12,7 +12,8 @@
     ],
     "config_flow": true,
     "requirements": [
-        "openai>=1.70.0"
+        "openai>=1.70.0",
+        "aiohttp>=3.9.0"
     ],
     "iot_class": "cloud_polling"
 }

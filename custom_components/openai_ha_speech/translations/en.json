@@ -11,7 +11,12 @@
                     "tts_speed": "The speed of the speech",
                     "stt_model": "The STT model.",
                     "stt_language": "The STT language (leave blank if variable).",
-                    "stt_temperature": "STT temperature."
+                    "stt_temperature": "STT temperature.",
+                    "realtime_enabled": "Enable OpenAI Realtime API (conversation agent)",
+                    "realtime_model": "Realtime API model.",
+                    "realtime_voice": "Realtime API voice.",
+                    "realtime_instructions": "System instructions for the conversation agent.",
+                    "realtime_temperature": "Realtime API temperature (creativity)."
                 }
             }
         }

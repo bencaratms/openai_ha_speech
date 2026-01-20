@@ -30,6 +30,15 @@ from .const import (
     CONF_STT_LANGUAGE,
     CONF_STT_TEMPERATURE,
     DEFAULT_STT_TEMPERATURE,
+    CONF_REALTIME_ENABLED,
+    CONF_REALTIME_MODEL,
+    REALTIME_MODELS,
+    CONF_REALTIME_VOICE,
+    REALTIME_VOICES,
+    CONF_REALTIME_INSTRUCTIONS,
+    DEFAULT_REALTIME_INSTRUCTIONS,
+    CONF_REALTIME_TEMPERATURE,
+    DEFAULT_REALTIME_TEMPERATURE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -79,6 +88,30 @@ class OpenAISpeechConfigFlow(ConfigFlow, domain=DOMAIN):
             vol.Optional(
                 CONF_STT_TEMPERATURE, default=DEFAULT_STT_TEMPERATURE
             ): NumberSelector(NumberSelectorConfig(min=0.0, max=1.0, step=0.1)),
+            # Realtime API options
+            vol.Optional(CONF_REALTIME_ENABLED, default=False): bool,
+            vol.Optional(CONF_REALTIME_MODEL, default=REALTIME_MODELS[0]): selector(
+                {
+                    "select": {
+                        "options": REALTIME_MODELS,
+                        "mode": "dropdown",
+                    }
+                }
+            ),
+            vol.Optional(CONF_REALTIME_VOICE, default=REALTIME_VOICES[0]): selector(
+                {
+                    "select": {
+                        "options": REALTIME_VOICES,
+                        "mode": "dropdown",
+                    }
+                }
+            ),
+            vol.Optional(
+                CONF_REALTIME_INSTRUCTIONS, default=DEFAULT_REALTIME_INSTRUCTIONS
+            ): str,
+            vol.Optional(
+                CONF_REALTIME_TEMPERATURE, default=DEFAULT_REALTIME_TEMPERATURE
+            ): NumberSelector(NumberSelectorConfig(min=0.0, max=1.2, step=0.1)),
         }
     )
 
