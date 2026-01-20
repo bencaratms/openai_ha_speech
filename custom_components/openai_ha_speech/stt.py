@@ -21,7 +21,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from openai import OpenAI, NotGiven, NOT_GIVEN
+from openai import OpenAI
 
 from .const import (
     TITLE,
@@ -63,8 +63,8 @@ class OpenAISTTEntity(SpeechToTextEntity):
         """Initialize STT entity."""
         self.openai_client = openai_client
         self.stt_model = config_entry.data.get(CONF_STT_MODEL, STT_MODELS[0])
-        self.stt_language: str | NotGiven = config_entry.data.get(
-            CONF_STT_LANGUAGE, NOT_GIVEN
+        self.stt_language: str | None = config_entry.data.get(
+            CONF_STT_LANGUAGE, None
         )
         self.stt_temperature = config_entry.data.get(
             CONF_STT_TEMPERATURE, DEFAULT_STT_TEMPERATURE
@@ -120,14 +120,17 @@ class OpenAISTTEntity(SpeechToTextEntity):
             audio_file = ("stt_audio.wav", audio_stream, "audio/wav")
 
             # Transcribe the audio file
+            transcribe_kwargs: dict = {
+                "model": self.stt_model,
+                "temperature": self.stt_temperature,
+                "response_format": "json",
+                "file": audio_file,
+            }
+            if self.stt_language is not None:
+                transcribe_kwargs["language"] = self.stt_language
+
             transcription = await asyncio.to_thread(
-                lambda: self.openai_client.audio.transcriptions.create(
-                    model=self.stt_model,
-                    language=self.stt_language,
-                    temperature=self.stt_temperature,
-                    response_format="json",
-                    file=audio_file,
-                )
+                lambda: self.openai_client.audio.transcriptions.create(**transcribe_kwargs)
             )
 
             # The response should contain the transcription
