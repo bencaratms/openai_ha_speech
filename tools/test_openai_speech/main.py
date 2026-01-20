@@ -42,9 +42,16 @@ except ImportError:
     Fore = _ForeType()
     Style = _StyleType()
 
+# Add parent directory to path so we can import from custom_components
+import sys
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from audio_handler import AudioHandler
-from realtime_client_standalone import OpenAIRealtimeClient, RealtimeConfig
+from custom_components.openai_ha_speech.realtime_client import (
+    OpenAIRealtimeClient,
+    RealtimeConfig,
+)
 from standard_client import OpenAIStandardClient, StandardConfig
 from script_runner import ScriptRunner
 
@@ -321,7 +328,16 @@ class TestApp:
                 pass
 
         self.audio.stop_recording()
-        audio_data = await record_task if record_task in done else await record_task
+
+        # Get the recorded audio - if record_task completed, get its result
+        # Otherwise, the recording was stopped and we need to retrieve what was recorded
+        if record_task in done:
+            audio_data = record_task.result()
+        else:
+            # Recording was stopped by Enter key, get whatever was recorded
+            # The stop_recording() call above ensures the recording loop exits
+            # and _recorded_data contains what was captured
+            audio_data = self.audio._get_recorded_data()
 
         if not audio_data:
             print_error("No audio recorded")
@@ -435,7 +451,12 @@ class TestApp:
                 pass
 
         self.audio.stop_recording()
-        audio_data = await record_task if record_task in done else await record_task
+
+        # Get the recorded audio
+        if record_task in done:
+            audio_data = record_task.result()
+        else:
+            audio_data = self.audio._get_recorded_data()
 
         if not audio_data:
             print_error("No audio recorded")

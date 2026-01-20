@@ -2,6 +2,8 @@
 
 A standalone console application for testing STT (Speech-to-Text), TTS (Text-to-Speech), and Conversation functionality using OpenAI's APIs.
 
+**Note:** This test app imports directly from the production `custom_components/openai_ha_speech/` code, ensuring you're testing the actual implementation.
+
 ## Setup
 
 1. Install dependencies:

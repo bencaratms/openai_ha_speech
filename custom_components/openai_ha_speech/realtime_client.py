@@ -13,12 +13,13 @@ import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, AsyncIterator, Callable
+from typing import TYPE_CHECKING, Any, AsyncIterator, Callable
 
 import aiohttp
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_API_KEY,
@@ -48,10 +49,9 @@ OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime"
 
 
 class SessionModality(Enum):
-    """Session modality types."""
+    """Session modality types for OpenAI Realtime API."""
 
     TEXT_ONLY = ["text"]
-    AUDIO_ONLY = ["audio"]
     TEXT_AND_AUDIO = ["text", "audio"]
 
 
@@ -101,6 +101,36 @@ class RealtimeConfig:
             ),
         )
 
+    @classmethod
+    def from_dict(cls, api_key: str, data: dict[str, Any]) -> "RealtimeConfig":
+        """Create config from a dictionary (for standalone usage).
+
+        Args:
+            api_key: The OpenAI API key.
+            data: Configuration dictionary with optional keys matching field names.
+
+        Returns:
+            A RealtimeConfig instance.
+        """
+        return cls(
+            api_key=api_key,
+            model=data.get("model", REALTIME_MODELS[0]),
+            voice=data.get("voice", REALTIME_VOICES[0]),
+            instructions=data.get("instructions", DEFAULT_REALTIME_INSTRUCTIONS),
+            temperature=data.get("temperature", DEFAULT_REALTIME_TEMPERATURE),
+            max_tokens=data.get("max_tokens", DEFAULT_REALTIME_MAX_TOKENS),
+            idle_timeout=data.get("idle_timeout", DEFAULT_REALTIME_IDLE_TIMEOUT),
+            vad_threshold=data.get("vad_threshold", DEFAULT_REALTIME_VAD_THRESHOLD),
+            silence_duration_ms=data.get(
+                "silence_duration_ms", DEFAULT_REALTIME_SILENCE_DURATION
+            ),
+            prefix_padding_ms=data.get(
+                "prefix_padding_ms", DEFAULT_REALTIME_PREFIX_PADDING
+            ),
+            input_audio_format=data.get("input_audio_format", "pcm16"),
+            output_audio_format=data.get("output_audio_format", "pcm16"),
+        )
+
 
 @dataclass
 class RealtimeResponse:
@@ -122,10 +152,16 @@ class OpenAIRealtimeClient:
 
     def __init__(
         self,
-        hass: HomeAssistant,
         config: RealtimeConfig,
+        hass: HomeAssistant | None = None,
     ) -> None:
-        """Initialize the Realtime API client."""
+        """Initialize the Realtime API client.
+
+        Args:
+            config: The realtime configuration.
+            hass: Optional Home Assistant instance. If provided, uses hass.async_create_task
+                  for better task management. If None, uses asyncio.create_task.
+        """
         self.hass = hass
         self.config = config
 
@@ -296,10 +332,13 @@ class OpenAIRealtimeClient:
         if self._idle_timeout_task:
             self._idle_timeout_task.cancel()
 
-        # Start new timeout task
-        self._idle_timeout_task = self.hass.async_create_task(
-            self._idle_timeout_handler()
-        )
+        # Start new timeout task (use hass.async_create_task if available for HA integration)
+        if self.hass is not None:
+            self._idle_timeout_task = self.hass.async_create_task(
+                self._idle_timeout_handler()
+            )
+        else:
+            self._idle_timeout_task = asyncio.create_task(self._idle_timeout_handler())
 
     async def _idle_timeout_handler(self) -> None:
         """Handle idle timeout - disconnect after inactivity."""
@@ -525,7 +564,7 @@ class OpenAIRealtimeClient:
         Returns:
             RealtimeResponse with transcript containing the transcription.
         """
-        if not await self.connect(SessionModality.AUDIO_ONLY, enable_vad=False):
+        if not await self.connect(SessionModality.TEXT_AND_AUDIO, enable_vad=False):
             return RealtimeResponse(error="Failed to connect to OpenAI service")
 
         self._reset_idle_timeout()
@@ -606,6 +645,124 @@ class OpenAIRealtimeClient:
 
         except Exception as err:
             _LOGGER.exception("Error in speech_to_text: %s", err)
+            await self.disconnect()
+            return RealtimeResponse(error=str(err))
+
+    async def voice_conversation(
+        self,
+        audio_data: bytes,
+        sample_rate: int = 24000,
+    ) -> RealtimeResponse:
+        """Send audio and get both text and audio response.
+
+        This method sends audio input and retrieves a full conversational response
+        including both the transcription of the input and the assistant's response
+        with text and audio.
+
+        Args:
+            audio_data: PCM16 audio data.
+            sample_rate: Sample rate of the audio (default 24kHz for Realtime API).
+
+        Returns:
+            RealtimeResponse with transcript (input), text (response), and audio_data.
+        """
+        if not await self.connect(SessionModality.TEXT_AND_AUDIO, enable_vad=False):
+            return RealtimeResponse(error="Failed to connect to OpenAI service")
+
+        self._reset_idle_timeout()
+
+        ws = self._ws
+        if ws is None:
+            return RealtimeResponse(error="Failed to connect to OpenAI service")
+
+        try:
+            # Send audio in chunks (16KB at a time)
+            chunk_size = 16384
+            for i in range(0, len(audio_data), chunk_size):
+                chunk = audio_data[i : i + chunk_size]
+                audio_b64 = base64.b64encode(chunk).decode("utf-8")
+                await ws.send_json(
+                    {
+                        "type": "input_audio_buffer.append",
+                        "audio": audio_b64,
+                    }
+                )
+
+            # Commit audio buffer and request response
+            await ws.send_json({"type": "input_audio_buffer.commit"})
+            await ws.send_json({"type": "response.create"})
+
+            # Collect response
+            response = RealtimeResponse()
+            transcript_parts: list[str] = []
+            text_parts: list[str] = []
+            audio_chunks: list[bytes] = []
+
+            async for msg in ws:
+                if msg.type == aiohttp.WSMsgType.TEXT:
+                    data = json.loads(msg.data)
+                    event_type = data.get("type", "")
+                    response.events.append(data)
+
+                    # Input transcription
+                    if (
+                        event_type
+                        == "conversation.item.input_audio_transcription.completed"
+                    ):
+                        response.transcript = data.get("transcript", "")
+                        _LOGGER.debug("Input transcription: %s", response.transcript)
+
+                    # Response text
+                    elif event_type == "response.text.delta":
+                        text_parts.append(data.get("delta", ""))
+                    elif event_type == "response.text.done":
+                        response.text = data.get("text", "".join(text_parts))
+
+                    # Response audio transcript (fallback for text)
+                    elif event_type == "response.audio_transcript.delta":
+                        if not text_parts:  # Only if no text response
+                            transcript_parts.append(data.get("delta", ""))
+                    elif event_type == "response.audio_transcript.done":
+                        if not response.text:
+                            response.text = data.get(
+                                "transcript", "".join(transcript_parts)
+                            )
+
+                    # Response audio
+                    elif event_type == "response.audio.delta":
+                        audio_b64 = data.get("delta", "")
+                        if audio_b64:
+                            audio_chunks.append(base64.b64decode(audio_b64))
+
+                    elif event_type == "response.done":
+                        break
+
+                    elif event_type == "error":
+                        error_msg = data.get("error", {}).get(
+                            "message", "Unknown error"
+                        )
+                        _LOGGER.error("Voice conversation error: %s", error_msg)
+                        return RealtimeResponse(error=error_msg)
+
+                elif msg.type == aiohttp.WSMsgType.ERROR:
+                    return RealtimeResponse(error="Connection error")
+
+                elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.CLOSING):
+                    return RealtimeResponse(error="Connection lost")
+
+            # Combine audio chunks
+            if audio_chunks:
+                response.audio_data = b"".join(audio_chunks)
+
+            # Fallback for text
+            if not response.text and transcript_parts:
+                response.text = "".join(transcript_parts)
+
+            self._reset_idle_timeout()
+            return response
+
+        except Exception as err:
+            _LOGGER.exception("Error in voice_conversation: %s", err)
             await self.disconnect()
             return RealtimeResponse(error=str(err))
 
@@ -705,7 +862,7 @@ def get_realtime_client(
 
     if "realtime_client" not in entry_data:
         config = RealtimeConfig.from_config_entry(config_entry)
-        entry_data["realtime_client"] = OpenAIRealtimeClient(hass, config)
+        entry_data["realtime_client"] = OpenAIRealtimeClient(config, hass)
 
     return entry_data["realtime_client"]
 

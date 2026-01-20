@@ -128,6 +128,28 @@ class AudioHandler:
         """Stop ongoing recording."""
         self._recording = False
 
+    def _get_recorded_data(self) -> bytes:
+        """Get the recorded audio data without waiting for recording to complete.
+
+        This is used when the recording task is cancelled but we still want
+        the audio that was captured before cancellation.
+
+        Returns:
+            PCM16 audio data, or empty bytes if nothing was recorded.
+        """
+        if not self._recorded_data:
+            return b""
+
+        audio_array = np.concatenate(self._recorded_data)
+        audio_bytes = audio_array.tobytes()
+
+        # Save to file
+        filepath = self._generate_filename("recording", "wav")
+        self.save_wav(audio_bytes, filepath, self.sample_rate, self.channels)
+        _LOGGER.info("Saved recording to %s", filepath)
+
+        return audio_bytes
+
     async def play(self, audio_data: bytes, sample_rate: int = 24000) -> None:
         """Play audio data through speakers.
 
