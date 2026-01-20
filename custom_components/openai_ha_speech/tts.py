@@ -58,6 +58,9 @@ class OpenAITTSEntity(TextToSpeechEntity):
 
     _attr_name = TITLE
     _attr_unique_id = TTS_ENTITY_UNIQUE_ID
+    _attr_default_language = "en"
+    _attr_supported_languages = SUPPORTED_LANGUAGES
+    _attr_supported_options = [ATTR_VOICE]
 
     def __init__(self, openai_client: OpenAI, config_entry: ConfigEntry):
         """Initialize TTS entity."""
@@ -67,21 +70,6 @@ class OpenAITTSEntity(TextToSpeechEntity):
             CONF_TTS_RESPONSE_FORMAT, TTS_RESPONSE_FORMATS[0]
         )
         self.tts_speed = config_entry.data.get(CONF_TTS_SPEED, DEFAULT_TTS_SPEED)
-
-    @property
-    def default_language(self) -> str:
-        """Return the default language."""
-        return "en"
-
-    @property
-    def supported_languages(self) -> list[str]:
-        """Return the list of supported languages."""
-        return SUPPORTED_LANGUAGES
-
-    @property
-    def supported_options(self) -> list[str]:
-        """Return list of supported options like voice."""
-        return [ATTR_VOICE]
 
     @callback
     def async_get_supported_voices(self, language: str) -> list[Voice] | None:
@@ -97,7 +85,7 @@ class OpenAITTSEntity(TextToSpeechEntity):
 
         try:
             if len(message) > MAX_MESSAGE_LENGTH:
-                raise MaxLengthExceeded
+                raise MaxLengthExceeded(message, "message", MAX_MESSAGE_LENGTH)
 
             # Generate TTS audio
             audio_bytes = await asyncio.to_thread(
