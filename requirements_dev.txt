@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# homeassistant requirements Visual C++ build tools on Windows
+homeassistant
