@@ -33,6 +33,10 @@ STT_MODELS = ["gpt-4o-transcribe", "gpt-4o-mini-transcribe", "whisper-1"]
 CONF_STT_LANGUAGE = "stt_language"
 CONF_STT_TEMPERATURE = "stt_temperature"
 DEFAULT_STT_TEMPERATURE: float = 0.0
+CONF_STT_USE_REALTIME = "stt_use_realtime"
+
+# TTS Realtime option
+CONF_TTS_USE_REALTIME = "tts_use_realtime"
 
 # Realtime API constants
 CONVERSATION_ENTITY_UNIQUE_ID = "openai-ha-speech-conversation"

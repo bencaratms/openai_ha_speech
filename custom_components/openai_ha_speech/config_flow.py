@@ -25,11 +25,13 @@ from .const import (
     CONF_TTS_SPEED,
     DEFAULT_TTS_SPEED,
     CONF_TTS_INSTRUCTIONS,
+    CONF_TTS_USE_REALTIME,
     CONF_STT_MODEL,
     STT_MODELS,
     CONF_STT_LANGUAGE,
     CONF_STT_TEMPERATURE,
     DEFAULT_STT_TEMPERATURE,
+    CONF_STT_USE_REALTIME,
     CONF_REALTIME_ENABLED,
     CONF_REALTIME_MODEL,
     REALTIME_MODELS,
@@ -121,6 +123,9 @@ class OpenAISpeechConfigFlow(ConfigFlow, domain=DOMAIN):
                     min=10, max=300, step=10, unit_of_measurement="seconds"
                 )
             ),
+            # Use Realtime API for TTS/STT (lower latency, shared connection)
+            vol.Optional(CONF_TTS_USE_REALTIME, default=False): bool,
+            vol.Optional(CONF_STT_USE_REALTIME, default=False): bool,
         }
     )
 
