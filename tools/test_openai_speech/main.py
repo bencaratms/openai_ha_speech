@@ -14,9 +14,13 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
+
+if TYPE_CHECKING:
+    from openai.types.chat import ChatCompletionMessageParam
 
 load_dotenv()
 
@@ -120,7 +124,7 @@ class TestApp:
             channels=audio_config.get("channels", 1),
         )
 
-        self._chat_history: list[dict] = []
+        self._chat_history: list[ChatCompletionMessageParam] = []
         self._last_response = ""
 
     async def run_interactive(self) -> None:
