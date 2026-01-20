@@ -29,11 +29,14 @@ try:
 except ImportError:
     COLOR_ENABLED = False
 
-    class Fore:
+    class _ForeType:
         RED = GREEN = YELLOW = CYAN = MAGENTA = BLUE = WHITE = RESET = ""
 
-    class Style:
+    class _StyleType:
         BRIGHT = RESET_ALL = ""
+
+    Fore = _ForeType()
+    Style = _StyleType()
 
 
 from audio_handler import AudioHandler
