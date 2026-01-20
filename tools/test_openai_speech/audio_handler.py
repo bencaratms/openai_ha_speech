@@ -51,6 +51,9 @@ class AudioHandler:
         """List available audio devices."""
         if not SOUNDDEVICE_AVAILABLE:
             return "Audio devices not available (sounddevice not installed)"
+
+        import sounddevice as sd
+
         return str(sd.query_devices())
 
     def _generate_filename(self, prefix: str, extension: str) -> Path:
@@ -76,6 +79,8 @@ class AudioHandler:
             raise RuntimeError(
                 "Audio recording not available (sounddevice not installed)"
             )
+
+        import sounddevice as sd
 
         self._recording = True
         self._recorded_data = []
@@ -133,6 +138,8 @@ class AudioHandler:
         if not SOUNDDEVICE_AVAILABLE:
             _LOGGER.warning("Audio playback not available (sounddevice not installed)")
             return
+
+        import sounddevice as sd
 
         # Save to file first
         filepath = self._generate_filename("playback", "wav")
