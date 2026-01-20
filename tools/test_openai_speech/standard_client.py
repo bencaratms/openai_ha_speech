@@ -6,9 +6,10 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Any
+from typing import Any, Literal
 
 from openai import OpenAI
+from openai.types.chat import ChatCompletionMessageParam
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class StandardConfig:
     api_key: str
     tts_model: str = "tts-1"
     tts_voice: str = "alloy"
-    tts_response_format: str = "mp3"
+    tts_response_format: Literal["mp3", "opus", "aac", "flac", "wav", "pcm"] = "mp3"
     tts_speed: float = 1.0
     stt_model: str = "whisper-1"
     stt_language: str | None = None
@@ -133,13 +134,13 @@ class OpenAIStandardClient:
             return StandardResponse(error=str(e))
 
     async def chat(
-        self, text: str, history: list[dict] | None = None
+        self, text: str, history: list[ChatCompletionMessageParam] | None = None
     ) -> StandardResponse:
         """Send a chat message using standard Chat API."""
         try:
             client = self._get_client()
 
-            messages = history or []
+            messages: list[ChatCompletionMessageParam] = list(history) if history else []
             messages.append({"role": "user", "content": text})
 
             def _chat():
